@@ -1,0 +1,101 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Admin Login</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        .siemens-cyan { color: #009a98; }
+        .bg-siemens-cyan { background-color: #009a98; }
+        .border-siemens-cyan { border-color: #009a98; }
+    </style>
+</head>
+<body class="bg-gray-900 text-white font-sans flex items-center justify-center min-h-screen p-4">
+
+    <div class="bg-gray-800 rounded-xl shadow-2xl p-8 w-full max-w-md">
+        
+        <div class="text-center mb-6">
+            <img src="https://i.postimg.cc/tggfx4RD/logo4.png" alt="Siemens Healthineers Logo" class="h-10 mx-auto mb-4" style = "width: 300px; height: 200px;">
+            <h1 class="text-3xl font-bold siemens-cyan">Admin Portal</h1>
+            <p class="text-gray-400 mt-2">Sign in to manage mobile access.</p>
+        </div>
+
+        <form id="login-form" class="space-y-6">
+            
+            <div>
+                <label for="username" class="block text-sm font-medium text-white">Username</label>
+                <input type="text" id="username" required class="mt-1 block w-full rounded-md border-gray-600 bg-gray-700 p-3 text-white placeholder-gray-400 focus:border-siemens-cyan focus:ring-siemens-cyan">
+            </div>
+
+            <div>
+                <label for="password" class="block text-sm font-medium text-white">Password</label>
+                <input type="password" id="password" required class="mt-1 block w-full rounded-md border-gray-600 bg-gray-700 p-3 text-white placeholder-gray-400 focus:border-siemens-cyan focus:ring-siemens-cyan">
+            </div>
+
+            <button type="submit" id="login-btn" class="w-full bg-siemens-cyan text-white py-3 rounded-md font-semibold hover:bg-opacity-90 transition duration-150">
+                Log In
+            </button>
+        </form>
+
+        <div id="status-message" class="mt-4 p-3 rounded-md text-sm hidden"></div>
+        <div class="mt-6 text-center text-xs text-gray-500">
+            Default Credentials:<br>
+            Admin: <code>admin</code> / <code>admin</code><br>
+            Technician: <code>nipun_arora</code> / <code>nippuunn</code>
+        </div>
+    </div>
+
+    <script>
+        document.getElementById('login-form').addEventListener('submit', async function(e) {
+            e.preventDefault();
+            const username = document.getElementById('username').value;
+            const password = document.getElementById('password').value;
+            const statusMessage = document.getElementById('status-message');
+            const loginBtn = document.getElementById('login-btn');
+
+            statusMessage.classList.add('hidden');
+            loginBtn.textContent = 'Logging in...';
+            loginBtn.disabled = true;
+
+            try {
+                const response = await fetch('/api/login', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ username, password })
+                });
+
+                const data = await response.json();
+                
+                if (response.ok) {
+                    // Store token and role in localStorage
+                    localStorage.setItem('adminToken', data.token);
+                    localStorage.setItem('adminRole', data.role);
+                    localStorage.setItem('adminUser', data.username);
+                    
+                    statusMessage.classList.remove('hidden');
+                    statusMessage.classList.add('bg-green-800');
+                    statusMessage.textContent = `Login successful! Redirecting to dashboard...`;
+                    
+                    // Redirect to the main dashboard
+                    setTimeout(() => {
+                        window.location.href = '/dashboard';
+                    }, 1000);
+                    
+                } else {
+                    throw new Error(data.detail || 'Login failed.');
+                }
+
+            } catch (error) {
+                statusMessage.classList.remove('hidden', 'bg-green-800');
+                statusMessage.classList.add('bg-red-800');
+                statusMessage.textContent = `Error: ${error.message}`;
+            } finally {
+                loginBtn.textContent = 'Log In';
+                loginBtn.disabled = false;
+            }
+        });
+    </script>
+
+</body>
+</html>

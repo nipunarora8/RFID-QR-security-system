@@ -1,0 +1,418 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Admin Dashboard</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        .siemens-cyan { color: #009a98; }
+        .bg-siemens-cyan { background-color: #009a98; }
+        .border-siemens-cyan { border-color: #009a98; }
+        /* Scrollbar styles for the log display */
+        #user-table-container {
+            max-height: 70vh; 
+            overflow-y: auto;   
+            scrollbar-width: thin; 
+            scrollbar-color: #4B5563 #1F2937; 
+        }
+        #user-table-container::-webkit-scrollbar {
+            width: 8px;
+        }
+        #user-table-container::-webkit-scrollbar-track {
+            background: #1F2937; 
+        }
+        #user-table-container::-webkit-scrollbar-thumb {
+            background-color: #4B5563; 
+            border-radius: 4px;
+        }
+    </style>
+</head>
+<body class="bg-gray-900 text-white font-sans flex min-h-screen">
+
+    <header class="bg-gray-800 w-full p-4 flex justify-between items-center fixed top-0 left-0 z-50 shadow-lg">
+        <div class="flex items-center space-x-4">
+            <img src="https://postimg.cc/sMtwFyhZ/ad5e0825" alt="Logo" class="h-8">
+            <h1 class="text-xl font-bold siemens-cyan">Mobile Access Admin</h1>
+            <span id="user-info" class="text-sm text-gray-400"></span>
+        </div>
+        
+        <div class="flex items-center space-x-3">
+             <button id="register-new-btn" style="display: none;" onclick="window.location.href='/register'" class="bg-green-600 text-white px-3 py-1 rounded-md text-sm hover:bg-green-500 transition duration-150">
+                + Register New Device
+            </button>
+             <button id="view-registered-btn" style="display: none;" class="bg-gray-600 text-white px-3 py-1 rounded-md text-sm cursor-default">
+                Device Registered
+            </button>
+            <button id="logout-btn" class="bg-red-600 text-white px-3 py-1 rounded-md text-sm hover:bg-red-500 transition duration-150">
+                Logout
+            </button>
+        </div>
+    </header>
+
+    <main class="w-full p-8 pt-20">
+        <div class="max-w-7xl mx-auto">
+            
+            <div class="flex justify-between items-center mb-6">
+                <h2 class="text-2xl font-semibold text-white">Registered Mobile Devices</h2>
+                <button id="refresh-users-btn" class="bg-siemens-cyan text-white px-4 py-2 rounded-md font-medium hover:bg-opacity-80">
+                    Refresh List
+                </button>
+            </div>
+
+            <p id="user-list-message" class="text-sm text-gray-400 mb-4"></p>
+            
+            <div id="user-table-container" class="bg-gray-800 rounded-xl shadow-lg p-4">
+                <table class="min-w-full text-left">
+                    <thead id="user-table-header" class="text-xs text-gray-400 uppercase border-b border-gray-700 sticky top-0 bg-gray-800 z-10">
+                        <tr>
+                            <th class="py-3 px-2">User / Token</th>
+                            <th class="py-3 px-2">Role</th>
+                            <th class="py-3 px-2">Access Status</th>
+                            <th class="py-3 px-2">Expiry Date</th>
+                            <th class="py-3 px-2 text-center action-header">Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody id="user-table-body" class="divide-y divide-gray-700">
+                        </tbody>
+                </table>
+            </div>
+        </div>
+    </main>
+    
+    <div id="confirmation-modal" class="fixed inset-0 z-[100] flex items-center justify-center bg-black bg-opacity-75 p-4 opacity-0 pointer-events-none">
+        <div id="confirmation-modal-card" class="bg-gray-800 rounded-lg shadow-xl p-6 w-full max-w-md scale-95">
+            <h2 id="confirmation-modal-title" class="text-xl font-bold text-red-500">Confirm Action</h2>
+            <p id="confirmation-modal-text" class="mt-4 text-gray-300">Are you sure...?</p>
+            <p id="confirmation-modal-error" class="text-sm text-red-400 mt-2"></p>
+            <div class="mt-6 flex justify-end space-x-4">
+                <button id="confirmation-cancel-btn" class="bg-gray-600 text-white px-4 py-2 rounded-md font-medium hover:bg-gray-500">
+                    Cancel
+                </button>
+                <button id="confirmation-confirm-btn" class="bg-red-600 text-white px-4 py-2 rounded-md font-medium hover:bg-red-500">
+                    Confirm
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // --- Global State ---
+        const authToken = localStorage.getItem('adminToken');
+        const loggedInUser = localStorage.getItem('adminUser'); 
+        const loggedInRole = localStorage.getItem('adminRole'); // 'Admin' or 'Technician'
+        let currentModalAction = null; 
+        let tokenToManage = null; // Stored as the USERNAME now (as per server logic)
+        let nameToManage = null;
+        
+        // --- Check Authentication on Load ---
+        if (!authToken) {
+            window.location.href = '/';
+        }
+        
+        // --- Element References ---
+        const userTableBody = document.getElementById('user-table-body');
+        const userListMessage = document.getElementById('user-list-message');
+        const refreshUsersBtn = document.getElementById('refresh-users-btn');
+        const logoutBtn = document.getElementById('logout-btn');
+        const userInfoSpan = document.getElementById('user-info');
+        
+        // Modal references
+        const confirmationModal = document.getElementById('confirmation-modal');
+        const confirmationModalCard = document.getElementById('confirmation-modal-card');
+        const confirmationModalTitle = document.getElementById('confirmation-modal-title');
+        const confirmationModalText = document.getElementById('confirmation-modal-text');
+        const confirmationModalError = document.getElementById('confirmation-modal-error');
+        const confirmationCancelBtn = document.getElementById('confirmation-cancel-btn');
+        const confirmationConfirmBtn = document.getElementById('confirmation-confirm-btn');
+
+        // New buttons
+        const registerNewBtn = document.getElementById('register-new-btn');
+        const viewRegisteredBtn = document.getElementById('view-registered-btn');
+        const userTableHeader = document.getElementById('user-table-header');
+
+
+        // --- Auth and Init ---
+        function getAuthHeaders() {
+            return {
+                'Authorization': `Basic ${authToken}`,
+                'Content-Type': 'application/json'
+            };
+        }
+        
+        function logout() {
+            localStorage.removeItem('adminToken');
+            localStorage.removeItem('adminRole');
+            localStorage.removeItem('adminUser');
+            window.location.href = '/';
+        }
+        
+        // Display logged-in user
+        document.addEventListener('DOMContentLoaded', () => {
+            if (loggedInUser && loggedInRole) {
+                userInfoSpan.textContent = `Logged in as ${loggedInUser} (${loggedInRole})`;
+            }
+            loadUsers();
+        });
+        
+        // --- Utility to determine if actions should be visible ---
+        function canManageUser(targetRole) {
+            // Admins can manage anyone
+            if (loggedInRole === 'Admin') {
+                return true;
+            }
+            // Technicians can only manage Operators or Revoked/Expired users
+            if (loggedInRole === 'Technician') {
+                return targetRole === 'Operator' || targetRole === 'Revoked' || targetRole === 'Expired';
+            }
+            return false;
+        }
+
+        // --- Data Loading and Display (Core Logic Fix) ---
+        async function loadUsers() {
+            userTableBody.innerHTML = ''; 
+            userListMessage.textContent = 'Loading registered devices...';
+            
+            let isUserRegistered = false; 
+            
+            try {
+                const response = await fetch('/api/admin/users', { headers: getAuthHeaders() });
+                
+                if (response.status === 401 || response.status === 403) {
+                    logout(); 
+                    return;
+                }
+                if (!response.ok) {
+                    const err = await response.json();
+                    throw new Error(err.detail || 'Failed to fetch users');
+                }
+                const users = await response.json();
+                
+                if (users.length === 0) {
+                    userListMessage.textContent = 'No mobile devices registered.';
+                } else {
+                    userListMessage.textContent = ''; 
+                }
+                
+                // Show/hide Action column based on logged-in user's role
+                const actionHeader = userTableHeader.querySelector('.action-header');
+                const showActions = loggedInRole === 'Admin' || loggedInRole === 'Technician';
+
+                if (actionHeader) {
+                     actionHeader.style.display = showActions ? '' : 'none';
+                }
+                
+                users.forEach(user => {
+                    // Check if the current row belongs to the logged-in user
+                    if (user.user_name.toLowerCase() === loggedInUser.toLowerCase()) {
+                        isUserRegistered = true;
+                    }
+                    
+                    let statusClass = 'text-gray-400';
+                    if (user.status === 'Active') {
+                        statusClass = 'text-green-500 font-medium';
+                    } else if (user.status === 'Revoked') {
+                        statusClass = 'text-red-500 font-medium';
+                    } else if (user.status === 'Expired') {
+                        statusClass = 'text-yellow-500';
+                    }
+
+                    // --- Action Button Logic ---
+                    let actionButtons = '';
+                    const canModify = canManageUser(user.role); // Check if the LOGGED-IN user can manage the TARGET user
+                    
+                    if (showActions) {
+                         // 1. Revoke/Grant Button Logic
+                        if (canModify) {
+                            if (user.status === 'Active') {
+                                actionButtons += `<button 
+                                                    class="action-btn text-red-500 hover:text-red-400 text-sm font-medium p-1" 
+                                                    data-uid="${user.user_name}" 
+                                                    data-name="${user.full_name}"
+                                                    data-action="revoke">
+                                                    Revoke
+                                                </button>`;
+                            } else if (user.status === 'Revoked' || user.status === 'Expired') {
+                                actionButtons += `<button 
+                                                class="action-btn text-green-500 hover:text-green-400 text-sm font-medium p-1" 
+                                                data-uid="${user.user_name}" 
+                                                data-name="${user.full_name}"
+                                                data-action="grant">
+                                                Grant Access
+                                            </button>`;
+                            }
+                        } else {
+                            actionButtons += `<span class="text-gray-500 text-xs">N/A</span>`;
+                        }
+
+                        // 2. Delete Button Logic (Only Admins get the trash icon)
+                        if (loggedInRole === 'Admin') {
+                            actionButtons += `<button 
+                                                class="delete-btn text-gray-500 hover:text-red-500 text-sm font-medium p-1 ml-2" 
+                                                data-uid="${user.user_name}" 
+                                                data-name="${user.full_name}"
+                                                data-action="delete"
+                                                title="Delete User">
+                                                <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 inline-block" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                                                    <path stroke-linecap="round" stroke-linejoin="round" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                                                </svg>
+                                            </button>`;
+                        }
+                    }
+
+                    
+                    const row = document.createElement('tr');
+                    row.className = "hover:bg-gray-700 transition duration-100";
+                    row.innerHTML = `
+                        <td class="py-2 px-2">
+                            <div>${user.full_name}</div>
+                            <div class="text-xs text-gray-500 truncate w-40" title="${user.device_token}">${user.device_token}</div>
+                        </td>
+                        <td class="py-2 px-2 text-sm text-gray-300">${user.role}</td>
+                        <td class="py-2 px-2 ${statusClass} text-sm">${user.status}</td>
+                        <td class="py-2 px-2 text-xs text-gray-400">${new Date(user.token_expiry).toLocaleDateString()}</td>
+                        <td class="py-2 px-2 text-center whitespace-nowrap" style="display: ${showActions ? '' : 'none'};">${actionButtons}</td>
+                    `;
+                    userTableBody.appendChild(row);
+                });
+                
+                // Add event listeners for Revoke/Grant
+                document.querySelectorAll('.action-btn').forEach(btn => {
+                    btn.addEventListener('click', (e) => {
+                        const uid = e.currentTarget.dataset.uid;
+                        const name = e.currentTarget.dataset.name;
+                        const action = e.currentTarget.dataset.action;
+                        openConfirmationModal(action, uid, name);
+                    });
+                });
+                
+                // Add event listeners for Delete
+                document.querySelectorAll('.delete-btn').forEach(btn => {
+                    btn.addEventListener('click', (e) => {
+                        const uid = e.currentTarget.dataset.uid; // User ID (username)
+                        const name = e.currentTarget.dataset.name;
+                        openConfirmationModal('delete', uid, name);
+                    });
+                });
+                
+            } catch (error) {
+                userListMessage.textContent = `Error loading users: ${error.message}`;
+            } finally {
+                // Conditional Button Display Logic (Unchanged)
+                if (isUserRegistered) {
+                    registerNewBtn.style.display = 'none';
+                    viewRegisteredBtn.style.display = 'block';
+                    viewRegisteredBtn.textContent = `Device Registered`; 
+                } else {
+                    registerNewBtn.style.display = 'block';
+                    viewRegisteredBtn.style.display = 'none';
+                }
+            }
+        }
+        
+        // --- Modal Functions (Updated to handle 'delete') ---
+        function openConfirmationModal(action, identifier, name) {
+            currentModalAction = action;
+            tokenToManage = identifier; 
+            nameToManage = name;
+            confirmationModalError.textContent = '';
+            
+            confirmationConfirmBtn.disabled = false;
+            
+            if (action === 'revoke') {
+                confirmationModalTitle.textContent = 'Confirm Revocation';
+                confirmationModalTitle.className = 'text-xl font-bold text-red-500';
+                confirmationModalText.textContent = `Are you sure you want to REVOKE access for ${name}? The app will stop working immediately.`;
+                confirmationConfirmBtn.className = 'bg-red-600 text-white px-4 py-2 rounded-md font-medium hover:bg-red-500';
+                confirmationConfirmBtn.textContent = 'REVOKE';
+            } else if (action === 'grant') {
+                confirmationModalTitle.textContent = 'Confirm Grant';
+                confirmationModalTitle.className = 'text-xl font-bold text-green-500';
+                confirmationModalText.textContent = `Are you sure you want to GRANT access to ${name}? Access will be restored.`;
+                confirmationConfirmBtn.className = 'bg-green-600 text-white px-4 py-2 rounded-md font-medium hover:bg-green-500';
+                confirmationConfirmBtn.textContent = 'GRANT ACCESS';
+            } else if (action === 'delete') {
+                confirmationModalTitle.textContent = 'Confirm DELETION';
+                confirmationModalTitle.className = 'text-xl font-bold text-red-700';
+                confirmationModalText.textContent = `WARNING: Are you sure you want to PERMANENTLY DELETE the registration for ${name}? This action cannot be undone.`;
+                confirmationConfirmBtn.className = 'bg-red-700 text-white px-4 py-2 rounded-md font-medium hover:bg-red-600';
+                confirmationConfirmBtn.textContent = 'DELETE PERMANENTLY';
+            }
+            
+            confirmationModal.classList.remove('opacity-0', 'pointer-events-none');
+            confirmationModalCard.classList.remove('scale-95');
+        }
+
+        function closeConfirmationModal() {
+            currentModalAction = null;
+            tokenToManage = null;
+            nameToManage = null;
+            confirmationModal.classList.add('opacity-0', 'pointer-events-none');
+            confirmationModalCard.classList.add('scale-95');
+        }
+
+        async function confirmModalAction() {
+            if (!tokenToManage || !currentModalAction) return;
+            
+            confirmationModalError.textContent = 'Processing...';
+            confirmationConfirmBtn.disabled = true; 
+            
+            let endpoint = '';
+            
+            // Payload uses 'uid' (which is the username) for all management tasks
+            const payload = JSON.stringify({ uid: tokenToManage }); 
+
+            if (currentModalAction === 'revoke') {
+                endpoint = '/api/admin/revoke';
+            } else if (currentModalAction === 'grant') {
+                endpoint = '/api/admin/grant';
+            } else if (currentModalAction === 'delete') {
+                endpoint = '/api/admin/delete';
+            }
+
+            try {
+                const response = await fetch(endpoint, {
+                    method: 'POST',
+                    headers: getAuthHeaders(),
+                    body: payload
+                });
+                
+                if (response.status === 401 || response.status === 403) {
+                    logout();
+                    return;
+                }
+                
+                if (response.status === 403) {
+                    // Specific forbidden response from backend check_management_permission
+                     throw new Error("Permission Denied: You cannot manage other Technicians or Admins.");
+                }
+
+                if (!response.ok) {
+                    const err = await response.json();
+                    throw new Error(err.detail || 'Server error');
+                }
+                
+                closeConfirmationModal();
+                loadUsers(); // Refresh the user list
+                
+            } catch (error) {
+                confirmationModalError.textContent = `Error: ${error.message}`;
+            } finally {
+                confirmationConfirmBtn.disabled = false;
+            }
+        }
+        
+        // --- Event Listeners ---
+        refreshUsersBtn.addEventListener('click', loadUsers);
+        logoutBtn.addEventListener('click', logout);
+        confirmationCancelBtn.addEventListener('click', closeConfirmationModal);
+        confirmationConfirmBtn.addEventListener('click', confirmModalAction);
+        
+        // New listener for the 'View Registered' button 
+        viewRegisteredBtn.addEventListener('click', () => {
+             window.location.href = '/register';
+        });
+    </script>
+
+</body>
+</html>
