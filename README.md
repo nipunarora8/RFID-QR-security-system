@@ -13,15 +13,12 @@
 ### 🎥 Demo Video
 Watch the system in action:
 
-https://user-images.githubusercontent.com/assets/demo_video.mp4
-<!-- Check pointing to local file for now in case github hosting isn't available -->
-[**⬇️ Download Demo Video**](demo_video.mp4)
+https://github.com/user-attachments/assets/ee88db0e-dea2-4240-90f6-318efe82cb6e
 
 ### 🤖 Android App
 To use the mobile scanning features, install the companion app:
 
-[**⬇️ Download RFID-QR.apk**](RFID-QR.apk)
-<video controls src="demo_video.mp4" title="Title"></video>
+#### [**⬇️ Download RFID-QR.apk**](RFID-QR.apk)
 ---
 
 ## 🚀 Features
