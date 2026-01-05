@@ -1,7 +1,7 @@
 # RFID & QR Security System
 
 <div align="center">
-  <p><b>A secure, two-factor authentication access control system using RFID cards and dynamic QR codes.</b></p>
+  <p><b>A two-factor authentication system using RFID cards and dynamic QR code.</b> Incorporating existing smart cards in an offline environment solves the task introduced by Siemens Healthineers at the Bavarian Healthcare Hackathon, Erlangen. </p>
 </div>
 
 ## 🎥 Demo Video
