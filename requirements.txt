@@ -1,0 +1,10 @@
+fastapi
+uvicorn
+pydantic
+pyserial
+requests
+cryptography
+qrcode[pil]
+python-dateutil
+jinja2
+python-multipart

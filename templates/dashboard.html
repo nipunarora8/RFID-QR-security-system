@@ -1,0 +1,739 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Smart Authentication Hub</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(10px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+        .fade-in { animation: fadeIn 0.3s ease-out; }
+        #wave-canvas {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            z-index: 0;
+        }
+        /* Scrollbar styles (unchanged) */
+        #log-display, #user-list-display {
+            max-height: 180px; 
+            overflow-y: auto;   
+            scrollbar-width: thin; 
+            scrollbar-color: #4B5563 #1F2937; 
+        }
+        #log-display::-webkit-scrollbar, #user-list-display::-webkit-scrollbar {
+            width: 8px;
+        }
+        #log-display::-webkit-scrollbar-track, #user-list-display::-webkit-scrollbar-track {
+            background: #1F2937; 
+        }
+        #log-display::-webkit-scrollbar-thumb, #user-list-display::-webkit-scrollbar-thumb {
+            background-color: #4B5563; 
+            border-radius: 4px;
+        }
+        
+        /* Tab styles (unchanged) */
+        .tab-btn {
+            padding: 0.75rem 1rem;
+            font-medium: 0.75rem 1rem;
+            font-weight: 500;
+            border-bottom: 3px solid transparent;
+            margin-bottom: -2px; 
+            cursor: pointer;
+        }
+        .tab-active {
+            color: #009a98;
+            border-bottom-color: #009a98;
+        }
+        .tab-inactive {
+            color: #9CA3AF; 
+            border-bottom-color: transparent;
+            hover:text-gray-300;
+        }
+
+        /* Modal Styles (unchanged) */
+        #confirmation-modal {
+            transition: opacity 0.25s ease;
+        }
+        #confirmation-modal-card {
+            transition: all 0.25s ease;
+        }
+    </style>
+</head>
+<body class="bg-gray-900 text-white font-sans flex items-center justify-center min-h-screen p-4">
+
+    <canvas id="wave-canvas"></canvas>
+
+    <div class="fixed top-6 right-6 z-50">
+        <img src="https://i.postimg.cc/tggfx4RD/logo4.png" alt="M3N Logo" class="h-12 md:h-16">
+    </div>
+
+    <div class="relative z-10 bg-gray-800 rounded-xl shadow-2xl p-6 md:p-8 w-full max-w-6xl">
+        
+        <!-- Header -->
+        <div class="flex justify-between items-center pb-4 border-b border-gray-700">
+            <!-- Left Side -->
+            <div class="flex items-center space-x-4">
+                <h1 class="text-2xl md:text-3xl font-bold text-[#009a98]">Smart Authentication Hub</h1>
+                <div id="status-container" class="flex items-center space-x-2">
+                    <div id="status-light" class="w-3 h-3 rounded-full bg-yellow-500 animate-pulse"></div>
+                    <span id="status-text" class="text-sm text-yellow-500">Connecting...</span>
+                </div>
+            </div>
+            <!-- 1. NEW: Right Side (Logout Button) -->
+            <div id="header-actions">
+                <button id="logout-btn" class="flex items-center space-x-2 bg-red-600 text-white px-4 py-2 rounded-md text-sm font-medium hover:bg-red-500" style="display: none;">
+                    <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                      <path stroke-linecap="round" stroke-linejoin="round" d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" />
+                    </svg>
+                    <span>Logout</span>
+                </button>
+            </div>
+        </div>
+
+        <!-- Main Content Grid -->
+        <div class="grid grid-cols-1 md:grid-cols-3 gap-6 md:gap-8 mt-6">
+            
+            <!-- Left Panel: Scan Info, OTP, & New Tabbed Section -->
+            <div class="md:col-span-2 space-y-4">
+                <h2 class="text-xl font-semibold text-gray-300 border-b border-gray-700 pb-2">Last Scan Event</h2>
+                
+                <!-- Box 1: User Details (unchanged) -->
+                <div id="scan-info-container" class="bg-gray-900 p-6 rounded-lg space-y-4 hidden">
+                    <div class="grid grid-cols-3 gap-4">
+                        <span class="text-sm font-medium text-gray-500">Name</span>
+                        <span id="scan-name" class="col-span-2 text-lg font-semibold text-white">-</span>
+                    </div>
+                    <div class="grid grid-cols-3 gap-4">
+                        <span class="text-sm font-medium text-gray-500">Role</span>
+                        <span id="scan-role" class="col-span-2 text-lg font-semibold text-white">-</span>
+                    </div>
+                    <div class="grid grid-cols-3 gap-4">
+                        <span class="text-sm font-medium text-gray-500">Expiry Date</span>
+                        <span id="scan-expiry" class="col-span-2 text-lg text-gray-400">-</span>
+                    </div>
+                </div>
+
+                <!-- Box 2: 6-DIGIT INPUT BOX (unchanged) -->
+                <div id="otp-input-container" class="bg-gray-900 p-6 rounded-lg space-y-3" style="display: none;">
+                    <label for="otp-input" class="block text-sm font-medium text-white">Technician 2FA Verification</label>
+                    <div class="mt-1 flex rounded-md shadow-sm">
+                        <input type="text" id="otp-input" name="otp-input" 
+                               class="flex-1 block w-full rounded-none rounded-l-md border border-gray-600 bg-gray-700 p-2 text-white placeholder-gray-400 focus:border-[#009a98] focus:ring-[#009a98]" 
+                               placeholder="123456" maxlength="6" pattern="[0-9]{6}">
+                        <button id="otp-submit" type="button" 
+                                class="inline-flex items-center rounded-r-md border border-l-0 border-gray-600 bg-gray-600 px-3 text-sm text-white hover:bg-gray-500">
+                            Verify
+                        </button>
+                    </div>
+                    <p id="otp-message" class="text-sm mt-2"></p> 
+                </div>
+
+                <!-- Box 3: Technician Tools (Tabbed Section) (unchanged) -->
+                <div id="technician-tools-container" class="bg-gray-900 rounded-lg" style="display: none;">
+                    <!-- Tab Headers -->
+                    <div class="flex border-b border-gray-700 px-6">
+                        <button id="tab-btn-logs" class="tab-btn tab-active">
+                            Event Log
+                        </button>
+                        <button id="tab-btn-users" class="tab-btn tab-inactive">
+                            User Management
+                        </button>
+                    </div>
+                    
+                    <!-- Tab Content Panes -->
+                    <div class="p-6">
+                        <!-- Log Viewer Pane -->
+                        <div id="tab-content-logs">
+                            <div class="flex justify-between items-center">
+                                <h3 class="text-lg font-semibold text-white">Technician Event Log</h3>
+                                <div class="flex space-x-2">
+                                    <button id="refresh-logs-btn" class="bg-[#009a98] text-white px-4 py-2 rounded-md text-sm font-medium hover:bg-opacity-80">
+                                        Refresh Logs
+                                    </button>
+                                    <button id="download-logs-btn" class="bg-gray-700 text-white p-2 rounded-md text-sm font-medium hover:bg-gray-600" title="Download Full Log">
+                                        <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                                          <path stroke-linecap="round" stroke-linejoin="round" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
+                                        </svg>
+                                    </button>
+                                </div>
+                            </div>
+                            <div id="log-display" class="mt-4 bg-gray-950 p-4 rounded-md font-mono text-xs text-gray-300">
+                                Click "Refresh Logs" to load...
+                            </div>
+                        </div>
+                        <!-- User Management Pane -->
+                        <div id="tab-content-users" style="display: none;">
+                            <div class="flex justify-between items-center">
+                                <h3 class="text-lg font-semibold text-white">User Management</h3>
+                                <button id="refresh-users-btn" class="bg-[#009a98] text-white px-4 py-2 rounded-md text-sm font-medium hover:bg-opacity-80">
+                                    Refresh Users
+                                </button>
+                            </div>
+                            <p id="user-list-message" class="text-sm text-gray-400 mt-2"></p>
+                            <div id="user-list-display" class="mt-4 bg-gray-950 p-4 rounded-md text-sm text-gray-300">
+                                <table class="w-full text-left">
+                                    <thead class="text-xs text-gray-400 uppercase border-b border-gray-700">
+                                        <tr>
+                                            <th class="py-2 px-1">Name</th>
+                                            <th class="py-2 px-1">Role</th>
+                                            <th class="py-2 px-1">Expiry</th>
+                                            <th class="py-2 px-1 text-center">Actions</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody id="user-table-body" class="divide-y divide-gray-700">
+                                        <!-- User rows will be injected here -->
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Box 4: Waiting Message -->
+                <div id="waiting-message" class="bg-gray-900 p-6 rounded-lg text-center">
+                    <p class="text-gray-400">Waiting for first card scan...</p>
+                </div>
+            </div>
+
+            <!-- Right Panel: QR Code / Status (unchanged) -->
+            <div class="md:col-span-1">
+                <h2 id="right-column-title" class="text-xl font-semibold text-gray-300 border-b border-gray-700 pb-2">Status</h2>
+                <div id="qr-container" class="bg-white p-4 rounded-lg shadow-lg mt-4" style="display: none;">
+                    <img id="qr-code-img" src="" alt="Technician QR Code" class="w-full h-auto">
+                    <p class="text-center text-sm text-gray-700 font-medium mt-2">Scan for one-time code</p>
+                </div>
+                <div id="access-status-container" class="mt-4 text-center" style="display: none;">
+                    <div id="access-status-icon" class="w-32 h-32 mx-auto"></div>
+                </div>
+            </div>
+
+        </div>
+    </div>
+    
+    <!-- Confirmation Modal (unchanged) -->
+    <div id="confirmation-modal" class="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-75 p-4 opacity-0 pointer-events-none">
+        <div id="confirmation-modal-card" class="bg-gray-800 rounded-lg shadow-xl p-6 w-full max-w-md scale-95">
+            <h2 id="confirmation-modal-title" class="text-xl font-bold text-red-500">Confirm Action</h2>
+            <p id="confirmation-modal-text" class="mt-4 text-gray-300">Are you sure...?</p>
+            <p id="confirmation-modal-error" class="text-sm text-red-400 mt-2"></p>
+            <div class="mt-6 flex justify-end space-x-4">
+                <button id="confirmation-cancel-btn" class="bg-gray-600 text-white px-4 py-2 rounded-md font-medium hover:bg-gray-500">
+                    Cancel
+                </button>
+                <button id="confirmation-confirm-btn" class="bg-red-600 text-white px-4 py-2 rounded-md font-medium hover:bg-red-500">
+                    Confirm
+                </button>
+            </div>
+        </div>
+    </div>
+
+
+    <!-- JavaScript -->
+    <script>
+        const wsUrl = `ws://${window.location.host}/ws`;
+
+        // --- Global State ---
+        let currentExpectedOtp = null;
+        let currentModalAction = null; 
+        let uidToManage = null;
+        let nameToManage = null;
+
+
+        // --- SVG Icons (unchanged) ---
+        const smileySVG = `
+            <svg class="w-full h-full text-green-500" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M14.828 14.828a4 4 0 01-5.656 0M9 10h.01M15 10h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path>
+            </svg>`;
+        const frownSVG = `
+            <svg class="w-full h-full text-red-500" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9.172 16.172a4 4 0 015.656 0M9 10h.01M15 10h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path>
+            </svg>`;
+
+        // --- Get Element References ---
+        const statusLight = document.getElementById('status-light');
+        const statusText = document.getElementById('status-text');
+        const waitingMessage = document.getElementById('waiting-message');
+        const scanInfoContainer = document.getElementById('scan-info-container');
+        const scanName = document.getElementById('scan-name');
+        const scanRole = document.getElementById('scan-role');
+        const scanExpiry = document.getElementById('scan-expiry');
+        const rightColumnTitle = document.getElementById('right-column-title');
+        const qrContainer = document.getElementById('qr-container');
+        const qrImage = document.getElementById('qr-code-img');
+        const accessStatusContainer = document.getElementById('access-status-container');
+        const accessStatusIcon = document.getElementById('access-status-icon');
+        const otpInputContainer = document.getElementById('otp-input-container');
+        const otpInput = document.getElementById('otp-input');
+        const otpSubmit = document.getElementById('otp-submit');
+        const otpMessage = document.getElementById('otp-message');
+        
+        const technicianToolsContainer = document.getElementById('technician-tools-container');
+        const tabBtnLogs = document.getElementById('tab-btn-logs');
+        const tabBtnUsers = document.getElementById('tab-btn-users');
+        const tabContentLogs = document.getElementById('tab-content-logs');
+        const tabContentUsers = document.getElementById('tab-content-users');
+
+        // Log references
+        const logDisplay = document.getElementById('log-display');
+        const refreshLogsBtn = document.getElementById('refresh-logs-btn');
+        const downloadLogsBtn = document.getElementById('download-logs-btn');
+        
+        // User references
+        const refreshUsersBtn = document.getElementById('refresh-users-btn');
+        const userTableBody = document.getElementById('user-table-body');
+        const userListMessage = document.getElementById('user-list-message');
+        
+        // Modal references
+        const confirmationModal = document.getElementById('confirmation-modal');
+        const confirmationModalCard = document.getElementById('confirmation-modal-card');
+        const confirmationModalTitle = document.getElementById('confirmation-modal-title');
+        const confirmationModalText = document.getElementById('confirmation-modal-text');
+        const confirmationModalError = document.getElementById('confirmation-modal-error');
+        const confirmationCancelBtn = document.getElementById('confirmation-cancel-btn');
+        const confirmationConfirmBtn = document.getElementById('confirmation-confirm-btn');
+        
+        // 2. NEW: Logout Button Reference
+        const logoutBtn = document.getElementById('logout-btn');
+
+        
+        // --- Log Loading Function (unchanged) ---
+        async function loadLogs() {
+            logDisplay.textContent = 'Loading logs...';
+            try {
+                const response = await fetch('/logs');
+                if (!response.ok) {
+                    const err = await response.json();
+                    throw new Error(err.error || 'Failed to fetch');
+                }
+                const logs = await response.json();
+                if (logs.length === 0) {
+                    logDisplay.textContent = 'No log entries found.';
+                    return;
+                }
+                let logHtml = '';
+                logs.forEach(entry => {
+                    const ts = new Date(entry.timestamp).toLocaleString();
+                    logHtml += `<div class="border-b border-gray-700 py-2">`;
+                    logHtml += `<span class="text-[#009a98]">[${ts}]</span>\n`;
+                    logHtml += `  <span class="text-white">${entry.name}</span> (<span class="text-gray-400">${entry.role}</span>)\n`;
+                    logHtml += `</div>`;
+                });
+                logDisplay.innerHTML = logHtml;
+            } catch (error) {
+                logDisplay.textContent = `Error loading logs: ${error.message}`;
+            }
+        }
+        
+        // --- Log Download Function (unchanged) ---
+        async function downloadLogs() {
+            try {
+                const response = await fetch('/logs');
+                if (!response.ok) throw new Error('Failed to fetch logs for download');
+                const logs = await response.json();
+                const logString = JSON.stringify(logs, null, 2); 
+                const blob = new Blob([logString], { type: 'application/json' });
+                const url = URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.href = url;
+                a.download = `authentication_logs_${new Date().toISOString().split('T')[0]}.json`;
+                document.body.appendChild(a);
+                a.click();
+                document.body.removeChild(a);
+                URL.revokeObjectURL(url);
+            } catch (error) {
+                console.error("Failed to download logs:", error);
+                logDisplay.textContent = `Error downloading logs: ${error.message}`;
+            }
+        }
+        
+        // --- User List Loading Function (unchanged from previous version) ---
+        async function loadUsers() {
+            userTableBody.innerHTML = ''; 
+            userListMessage.textContent = 'Loading user list...';
+            try {
+                const response = await fetch('/users');
+                if (!response.ok) {
+                    const err = await response.json();
+                    throw new Error(err.error || 'Failed to fetch users');
+                }
+                const users = await response.json();
+                
+                if (users.length === 0) {
+                    userListMessage.textContent = 'No users found in database.';
+                    return;
+                }
+                
+                userListMessage.textContent = ''; 
+                
+                users.forEach(user => {
+                    let roleClass = 'text-white';
+                    let roleText = user.role;
+                    if (user.role === 'Revoked') {
+                         roleClass = 'text-red-500 font-medium';
+                    }
+                    if (user.role === 'Technician') {
+                        roleClass = 'text-[#ed008c] font-medium';
+                    }
+                    if (user.role === 'Operator') {
+                        roleClass = 'text-green-400';
+                    }
+                    
+                    let actionCell = '';
+                    if (user.role === 'Operator') {
+                        actionCell = `<button 
+                                        class="action-btn text-red-500 hover:text-red-400 text-sm font-medium" 
+                                        data-uid="${user.uid}" 
+                                        data-name="${user.name}"
+                                        data-action="revoke">
+                                        Revoke
+                                    </button>`;
+                    } else if (user.role === 'Revoked') {
+                         actionCell = `<button 
+                                        class="action-btn text-green-500 hover:text-green-400 text-sm font-medium" 
+                                        data-uid="${user.uid}" 
+                                        data-name="${user.name}"
+                                        data-action="grant">
+                                        Grant Access
+                                    </button>`;
+                    } else {
+                        actionCell = '<span class="text-gray-500 text-xs">N/A</span>';
+                    }
+                    
+                    const row = document.createElement('tr');
+                    row.innerHTML = `
+                        <td class="py-2 px-1">${user.name}</td>
+                        <td class="py-2 px-1 ${roleClass}">${roleText}</td>
+                        <td class="py-2 px-1">${user.expiry_date}</td>
+                        <td class="py-2 px-1 text-center">${actionCell}</td>
+                    `;
+                    userTableBody.appendChild(row);
+                });
+                
+                document.querySelectorAll('.action-btn').forEach(btn => {
+                    btn.addEventListener('click', (e) => {
+                        const uid = e.currentTarget.dataset.uid;
+                        const name = e.currentTarget.dataset.name;
+                        const action = e.currentTarget.dataset.action;
+                        openConfirmationModal(action, uid, name);
+                    });
+                });
+                
+            } catch (error) {
+                userListMessage.textContent = `Error loading users: ${error.message}`;
+            }
+        }
+        
+        // --- Modal Functions (unchanged) ---
+        function openConfirmationModal(action, uid, name) {
+            currentModalAction = action;
+            uidToManage = uid;
+            nameToManage = name;
+            confirmationModalError.textContent = '';
+            
+            if (action === 'revoke') {
+                confirmationModalTitle.textContent = 'Confirm Revocation';
+                confirmationModalTitle.className = 'text-xl font-bold text-red-500';
+                confirmationModalText.textContent = `Are you sure you want to revoke all access for ${name}?`;
+                confirmationConfirmBtn.className = 'bg-red-600 text-white px-4 py-2 rounded-md font-medium hover:bg-red-500';
+                confirmationConfirmBtn.textContent = 'Revoke Access';
+            } else if (action === 'grant') {
+                confirmationModalTitle.textContent = 'Confirm Grant';
+                confirmationModalTitle.className = 'text-xl font-bold text-green-500';
+                confirmationModalText.textContent = `Are you sure you want to grant Operator access to ${name}?`;
+                confirmationConfirmBtn.className = 'bg-green-600 text-white px-4 py-2 rounded-md font-medium hover:bg-green-500';
+                confirmationConfirmBtn.textContent = 'Grant Access';
+            }
+            
+            confirmationModal.classList.remove('opacity-0', 'pointer-events-none');
+            confirmationModalCard.classList.remove('scale-95');
+        }
+        function closeConfirmationModal() {
+            currentModalAction = null;
+            uidToManage = null;
+            nameToManage = null;
+            confirmationModal.classList.add('opacity-0', 'pointer-events-none');
+            confirmationModalCard.classList.add('scale-95');
+        }
+        async function confirmModalAction() {
+            if (!uidToManage || !currentModalAction) return;
+            confirmationModalError.textContent = 'Processing...';
+            const endpoint = (currentModalAction === 'revoke') ? '/users/revoke' : '/users/grant';
+            try {
+                const response = await fetch(endpoint, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ uid: uidToManage })
+                });
+                if (!response.ok) {
+                    const err = await response.json();
+                    throw new Error(err.error || 'Server error');
+                }
+                closeConfirmationModal();
+                loadUsers(); 
+            } catch (error) {
+                confirmationModalError.textContent = `Error: ${error.message}`;
+            }
+        }
+
+        // --- 3. NEW: Reset Function ---
+        function resetToWaitingState() {
+            // Hide all dynamic content
+            scanInfoContainer.style.display = 'none';
+            qrContainer.style.display = 'none';
+            accessStatusContainer.style.display = 'none';
+            otpInputContainer.style.display = 'none'; 
+            technicianToolsContainer.style.display = 'none';
+            logoutBtn.style.display = 'none'; // Hide logout button
+            
+            // Reset global state
+            currentExpectedOtp = null;
+            uidToManage = null;
+            currentModalAction = null;
+            
+            // Reset OTP fields
+            otpInput.value = '';
+            otpMessage.textContent = '';
+            otpInput.disabled = false;
+            otpSubmit.disabled = false;
+            
+            // Reset titles
+            rightColumnTitle.textContent = "Status";
+            rightColumnTitle.className = "text-xl font-semibold text-gray-300 border-b border-gray-700 pb-2";
+
+            // Show waiting message
+            waitingMessage.style.display = 'block';
+            
+            // Reset tab to default
+            showTab('logs');
+        }
+
+        // --- 4. UPDATED: Helper Functions ---
+        function showAccessGrantedUI(isTechnician = false) {
+            qrContainer.style.display = 'none';
+            otpInputContainer.style.display = 'none';
+            
+            rightColumnTitle.textContent = "Access Granted"; 
+            rightColumnTitle.className = "text-xl font-semibold text-green-500 border-b border-gray-700 pb-2"; 
+            accessStatusIcon.innerHTML = smileySVG; 
+            accessStatusContainer.style.display = 'block';
+
+            if (isTechnician) {
+                technicianToolsContainer.style.display = 'block';
+                logoutBtn.style.display = 'flex'; // Show logout button
+                showTab('logs');
+                loadLogs(); 
+            } else {
+                technicianToolsContainer.style.display = 'none';
+            }
+        }
+        function showAccessDeniedUI() {
+            qrContainer.style.display = 'none';
+            otpInputContainer.style.display = 'none';
+            technicianToolsContainer.style.display = 'none'; 
+
+            rightColumnTitle.textContent = "Access Denied";
+            rightColumnTitle.className = "text-xl font-semibold text-red-500 border-b border-gray-700 pb-2";
+            
+            accessStatusIcon.innerHTML = frownSVG; 
+            accessStatusContainer.style.display = 'block';
+        }
+        
+        
+        // --- 5. UPDATED: WebSocket Logic ---
+        function connectWebSocket() {
+            const ws = new WebSocket(wsUrl);
+
+            ws.onopen = () => {
+                console.log("WebSocket connected.");
+                statusText.textContent = "Connected";
+                statusLight.classList.remove('bg-yellow-500', 'bg-red-500', 'animate-pulse');
+                statusLight.classList.add('bg-green-500');
+            };
+
+            ws.onmessage = (event) => {
+                console.log("Message received:", event.data);
+                const data = JSON.parse(event.data);
+                
+                // --- Reset all fields using the new helper ---
+                resetToWaitingState();
+                
+                // Show/hide scan info
+                waitingMessage.style.display = 'none';
+                scanInfoContainer.style.display = 'block';
+                scanInfoContainer.classList.add('fade-in');
+                
+                scanName.textContent = data.name || '-';
+                scanRole.textContent = data.role || '-';
+                scanExpiry.textContent = data.expiry_date || 'N/A';
+                
+                scanRole.className = "col-span-2 text-lg font-semibold"; // Reset colors
+                
+                // --- End Reset ---
+
+                
+                if (data.role === "Technician") {
+                    scanRole.classList.add('text-[#ed008c]'); 
+                    rightColumnTitle.textContent = "Technician QR";
+                    rightColumnTitle.classList.add('text-[#ed008c]'); 
+                    
+                    if (data.qr_code_data_url) {
+                        qrImage.src = data.qr_code_data_url;
+                        qrContainer.style.display = 'block'; 
+                    }
+                    if (data.otp_code) {
+                        currentExpectedOtp = data.otp_code;
+                        otpInputContainer.style.display = 'block'; 
+                        console.log("Expecting OTP:", currentExpectedOtp); 
+                    }
+                    
+                } else if (data.role === "Operator") {
+                    scanRole.classList.add('text-green-500'); 
+                    showAccessGrantedUI(false); 
+                    
+                } else {
+                    // This handles "Denied", "Revoked", "Card Expired", etc.
+                    scanRole.classList.add('text-red-500');
+                    showAccessDeniedUI();
+                }
+                
+                setTimeout(() => {
+                    scanInfoContainer.classList.remove('fade-in');
+                }, 300);
+            };
+
+            ws.onclose = () => {
+                console.log("WebSocket disconnected. Retrying in 3 seconds...");
+                resetToWaitingState(); // Reset UI on disconnect
+                statusText.textContent = "Disconnected";
+                statusLight.classList.add('bg-red-500', 'animate-pulse');
+                setTimeout(connectWebSocket, 3000);
+            };
+
+            ws.onerror = (error) => {
+                console.error("WebSocket error:", error);
+                statusText.textContent = "Error";
+                statusLight.classList.add('bg-red-500', 'animate-pulse');
+                ws.close();
+            };
+        }
+
+        // --- OTP Submit Button ---
+        otpSubmit.addEventListener('click', () => {
+            const enteredCode = otpInput.value;
+            
+            if (currentExpectedOtp === null) {
+                otpMessage.className = 'text-sm mt-2 text-yellow-600';
+                otpMessage.textContent = 'Invalid state. Please re-scan card.';
+                return;
+            }
+
+            if (enteredCode === currentExpectedOtp) {
+                otpMessage.className = 'text-sm mt-2 text-green-600 font-bold';
+                otpMessage.textContent = 'Code Verified! Access fully granted.';
+                otpInput.disabled = true;
+                otpSubmit.disabled = true;
+                
+                showAccessGrantedUI(true); // This will now show smiley, tools, AND logout button
+
+            } else {
+                otpMessage.className = 'text-sm mt-2 text-red-600 font-bold';
+                otpMessage.textContent = 'Invalid code. Please try again.';
+            }
+        });
+        
+        // --- Tab Logic (unchanged) ---
+        function showTab(tabName) {
+            if (tabName === 'logs') {
+                tabContentLogs.style.display = 'block';
+                tabBtnLogs.classList.add('tab-active');
+                tabBtnLogs.classList.remove('tab-inactive');
+                
+                tabContentUsers.style.display = 'none';
+                tabBtnUsers.classList.remove('tab-active');
+                tabBtnUsers.classList.add('tab-inactive');
+                
+                loadLogs();
+            } else if (tabName === 'users') {
+                tabContentUsers.style.display = 'block';
+                tabBtnUsers.classList.add('tab-active');
+                tabBtnUsers.classList.remove('tab-inactive');
+                
+                tabContentLogs.style.display = 'none';
+                tabBtnLogs.classList.remove('tab-active');
+                tabBtnLogs.classList.add('tab-inactive');
+                
+                loadUsers();
+            }
+        }
+        tabBtnLogs.addEventListener('click', () => showTab('logs'));
+        tabBtnUsers.addEventListener('click', () => showTab('users'));
+
+        // --- 6. NEW: Logout Button Listener ---
+        logoutBtn.addEventListener('click', resetToWaitingState);
+
+        // --- Other Event Listeners (unchanged) ---
+        refreshLogsBtn.addEventListener('click', loadLogs); 
+        downloadLogsBtn.addEventListener('click', downloadLogs);
+        refreshUsersBtn.addEventListener('click', loadUsers);
+        confirmationCancelBtn.addEventListener('click', closeConfirmationModal);
+        confirmationConfirmBtn.addEventListener('click', confirmModalAction);
+
+
+        // Start the WebSocket connection
+        connectWebSocket();
+
+        // --- Dynamic Wave Animation (unchanged) ---
+        const canvas = document.getElementById('wave-canvas');
+        const ctx = canvas.getContext('2d');
+        let waveWidth, waveHeight;
+        let frame = 0;
+        const waveParams = [
+            { color: '#009a98', amplitude: 200, frequency: 0.01, offset: 0, speed: 0.015, dots: 200, size: 2 },
+            { color: '#ED008C', amplitude: 175, frequency: 0.015, offset: 2, speed: 0.02, dots: 200, size: 2 },
+            { color: '#009a98', amplitude: 160, frequency: 0.02, offset: 1, speed: 0.01, dots: 150, size: 1.5 },
+            { color: '#ED008C', amplitude: 150, frequency: 0.008, offset: 3, speed: 0.005, dots: 150, size: 1.5 }
+        ];
+
+        function resizeCanvas() {
+            waveWidth = canvas.width = window.innerWidth;
+            waveHeight = canvas.height = window.innerHeight;
+        }
+
+        function drawWave() {
+            requestAnimationFrame(drawWave);
+            
+            ctx.fillStyle = '#111827'; 
+            ctx.fillRect(0, 0, waveWidth, waveHeight);
+
+            const yCenter = waveHeight / 2;
+            frame++;
+
+            waveParams.forEach(wave => {
+                ctx.fillStyle = wave.color;
+                
+                for (let i = 0; i < wave.dots; i++) {
+                    const x = (waveWidth / wave.dots) * i;
+                    const taper = Math.sin((i / wave.dots) * Math.PI); 
+                    const y = yCenter + Math.sin(x * wave.frequency + frame * wave.speed + wave.offset) * wave.amplitude * taper;
+                    
+                    ctx.beginPath();
+                    ctx.arc(x, y, wave.size, 0, Math.PI * 2);
+                    ctx.fill();
+                }
+            });
+        }
+
+        window.addEventListener('resize', resizeCanvas);
+        resizeCanvas();
+        drawWave();
+
+    </script>
+
+</body>
+</html>
