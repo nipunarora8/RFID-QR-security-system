@@ -1,21 +1,15 @@
 # RFID & QR Security System
 
 <div align="center">
-  <img src="static/logo.png" alt="Project Logo" width="200"/>
-  <br>
   <p><b>A secure, two-factor authentication access control system using RFID cards and dynamic QR codes.</b></p>
 </div>
 
----
-
-## 📱 Mobile App & Demo
-
-### 🎥 Demo Video
+## 🎥 Demo Video
 Watch the system in action:
 
 https://github.com/user-attachments/assets/ee88db0e-dea2-4240-90f6-318efe82cb6e
 
-### 🤖 Android App
+## 🤖 Android App
 To use the mobile scanning features, install the companion app:
 
 #### [**⬇️ Download RFID-QR.apk**](RFID-QR.apk)
